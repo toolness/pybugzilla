@@ -6,6 +6,7 @@ import base64
 import httplib
 import urllib
 import mimetypes
+import datetime
 from urlparse import urlparse
 from getpass import getpass
 
@@ -100,7 +101,7 @@ def getpass_or_die(prompt, getpass=getpass):
 
     return password
 
-def load_config(filename=None, getpass=getpass_or_die):
+def load_config(filename=None, getpass=None):
     config = {}
     config.update(DEFAULT_CONFIG)
 
@@ -118,7 +119,8 @@ def load_config(filename=None, getpass=getpass_or_die):
     return config
 
 class BugzillaApi(object):
-    def __init__(self, config=None, jsonreq=None):
+    def __init__(self, config=None, jsonreq=None,
+                 getpass=getpass_or_die):
         if config is None:
             config = load_config()
 
@@ -136,6 +138,33 @@ class BugzillaApi(object):
                         content_type=None, is_patch=False, is_private=False,
                         is_obsolete=False,
                         guess_mime_type=mimetypes.guess_type):
+        """
+        >>> jsonreq = Mock('jsonreq')
+        >>> jsonreq.mock_returns = {
+        ...   "status": 201,
+        ...   "body": {"ref": "http://foo/latest/attachment/1"},
+        ...   "reason": "Created",
+        ...   "content_type": "application/json"
+        ... }
+        >>> bzapi = BugzillaApi(config=TEST_CFG_WITH_LOGIN,
+        ...                     jsonreq=jsonreq)
+        >>> bzapi.post_attachment(bug_id=536619,
+        ...                       contents="testing!",
+        ...                       filename="contents.txt",
+        ...                       description="test upload")
+        Called jsonreq(
+            body={'is_obsolete': False, 'flags': [],
+                  'description': 'test upload',
+                  'content_type': 'text/plain', 'encoding': 'base64',
+                  'file_name': 'contents.txt', 'is_patch': False,
+                  'data': 'dGVzdGluZyE=', 'is_private': False,
+                  'size': 8},
+            method='POST',
+            query_args={'username': 'bar', 'password': 'baz'},
+            url='http://foo/latest/bug/536619/attachment')
+        {'ref': 'http://foo/latest/attachment/1'}
+        """
+
         if content_type is None:
             content_type = guess_mime_type(filename)[0]
             if not content_type:
@@ -182,6 +211,103 @@ class BugzillaApi(object):
 
 class BugzillaApiError(Exception):
     pass
+
+def iso8601_to_datetime(timestamp):
+    """
+    >>> iso8601_to_datetime('2010-04-11T19:16:59Z')
+    datetime.datetime(2010, 4, 11, 19, 16, 59)
+    """
+
+    return datetime.datetime.strptime(timestamp,
+                                      "%Y-%m-%dT%H:%M:%SZ")
+
+class Attachment(object):
+    """
+    >>> bzapi = Mock('bzapi')
+    >>> bzapi.request.mock_returns = TEST_ATTACHMENT_WITH_DATA
+    >>> a = Attachment(TEST_ATTACHMENT_WITHOUT_DATA, bzapi)
+    >>> a.data
+    Called bzapi.request(
+        'GET',
+        '/attachment/438797',
+        query_args={'attachmentdata': '1'})
+    'testing!'
+    """
+
+    def __init__(self, jsonobj, bzapi=None):
+        self.bzapi = bzapi
+        self.id = int(jsonobj['id'])
+        self.description = jsonobj['description']
+        self.content_type = jsonobj['content_type']
+        for timeprop in ['last_change_time']:
+            setattr(self, timeprop, jsonobj[timeprop])
+        if 'data' in jsonobj:
+            self.__data = self.__decode_data(jsonobj)
+        else:
+            self.__data = None
+
+    @property
+    def data(self):
+        if self.__data is None and self.bzapi:
+            jsonobj = self.__get_full_attachment(self.bzapi, self.id)
+            self.__data = self.__decode_data(jsonobj)
+        return self.__data
+
+    def __decode_data(self, jsonobj):
+        if jsonobj['encoding'] != 'base64':
+            raise NotImplementedError("unrecognized encoding: %s" %
+                                      jsonobj['encoding'])
+        return base64.b64decode(jsonobj['data'])
+
+    def __repr__(self):
+        return '<Attachment %d - %s>' % (self.id, repr(self.description))
+
+    @staticmethod
+    def __get_full_attachment(bzapi, attach_id):
+        return bzapi.request('GET', '/attachment/%d' % attach_id,
+                             query_args={'attachmentdata': '1'})
+
+    @classmethod
+    def fetch(klass, bzapi, attach_id):
+        """
+        >>> bzapi = Mock('bzapi')
+        >>> bzapi.request.mock_returns = TEST_ATTACHMENT_WITH_DATA
+        >>> Attachment.fetch(bzapi, 438797)
+        Called bzapi.request(
+            'GET',
+            '/attachment/438797',
+            query_args={'attachmentdata': '1'})
+        <Attachment 438797 - u'test upload'>
+        """
+
+        return klass(klass.__get_full_attachment(bzapi, attach_id))
+
+class Bug(object):
+    """
+    >>> Bug(TEST_BUG)
+    <Bug 558680 - u'Here is a summary'>
+    """
+
+    def __init__(self, jsonobj):
+        self.id = int(jsonobj['id'])
+        self.summary = jsonobj['summary']
+        self.attachments = [Attachment(attach)
+                            for attach in jsonobj['attachments']]
+
+    def __repr__(self):
+        return '<Bug %d - %s>' % (self.id, repr(self.summary))
+
+    @classmethod
+    def fetch(klass, bzapi, bug_id):
+        """
+        >>> bzapi = Mock('bzapi')
+        >>> bzapi.request.mock_returns = TEST_BUG
+        >>> Bug.fetch(bzapi, 558680)
+        Called bzapi.request('GET', '/bug/558680')
+        <Bug 558680 - u'Here is a summary'>
+        """
+
+        return klass(bzapi.request('GET', '/bug/%d' % bug_id))
 
 if __name__ == '__main__':
     bzapi = BugzillaApi()
