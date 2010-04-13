@@ -221,7 +221,29 @@ def iso8601_to_datetime(timestamp):
     return datetime.datetime.strptime(timestamp,
                                       "%Y-%m-%dT%H:%M:%SZ")
 
-class Attachment(object):
+class BugzillaObject(object):
+    __bzprops__ = {}
+
+    def _set_bzprops(self, jsonobj):
+        for name, proptype in self.__bzprops__.items():
+            if proptype == bool:
+                if jsonobj[name] == '0':
+                    setattr(self, name, False)
+                elif jsonobj[name] == '1':
+                    setattr(self, name, True)
+                else:
+                    raise ValueError('bad boolean value: %s' %
+                                     repr(jsonobj[name]))
+            elif proptype in [int, unicode, str]:
+                setattr(self, name, proptype(jsonobj[name]))
+            elif proptype == datetime.datetime:
+                setattr(self, name,
+                        iso8601_to_datetime(jsonobj[name]))
+            else:
+                raise ValueError("bad proptype for '%s': %s" %
+                                 name, repr(proptype))
+
+class Attachment(BugzillaObject):
     """
     >>> bzapi = Mock('bzapi')
     >>> bzapi.request.mock_returns = TEST_ATTACHMENT_WITH_DATA
@@ -234,13 +256,17 @@ class Attachment(object):
     'testing!'
     """
 
+    __bzprops__ = {
+        'id': int,
+        'last_change_time': datetime.datetime,
+        'creation_time': datetime.datetime,
+        'description': unicode,
+        'content_type': str
+        }
+
     def __init__(self, jsonobj, bzapi=None):
+        self._set_bzprops(jsonobj)
         self.bzapi = bzapi
-        self.id = int(jsonobj['id'])
-        self.description = jsonobj['description']
-        self.content_type = jsonobj['content_type']
-        for timeprop in ['last_change_time']:
-            setattr(self, timeprop, jsonobj[timeprop])
         if 'data' in jsonobj:
             self.__data = self.__decode_data(jsonobj)
         else:
@@ -282,15 +308,19 @@ class Attachment(object):
 
         return klass(klass.__get_full_attachment(bzapi, attach_id))
 
-class Bug(object):
+class Bug(BugzillaObject):
     """
     >>> Bug(TEST_BUG)
     <Bug 558680 - u'Here is a summary'>
     """
 
+    __bzprops__ = {
+        'id': int,
+        'summary': unicode
+        }
+
     def __init__(self, jsonobj):
-        self.id = int(jsonobj['id'])
-        self.summary = jsonobj['summary']
+        self._set_bzprops(jsonobj)
         self.attachments = [Attachment(attach)
                             for attach in jsonobj['attachments']]
 
