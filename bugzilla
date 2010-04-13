@@ -44,22 +44,39 @@ def json_request(method, url, query_args=None, body=None):
             'content_type': mimetype,
             'body': data}
 
-def make_caching_json_request(cachedir, json_request=json_request):
+def make_caching_json_request(cache, json_request=json_request):
     from hashlib import sha1 as hashfunc
 
     def caching_json_request(method, url, query_args=None, body=None):
-        key = repr((method, url, query_args, body))
-        hashfile = '%s.json' % hashfunc(key).hexdigest()
-        hashpath = os.path.join(cachedir, hashfile)
-        if not os.path.exists(hashpath):
-            response = json_request(method=method,
-                                    url=url,
-                                    query_args=query_args,
-                                    body=body)
-            open(hashpath, 'w').write(json.dumps(response))
-        return json.loads(open(hashpath, 'r').read())
+        key = hashfunc(repr((method, url, query_args, body))).hexdigest()
+        if not key in cache:
+            cache[key] = json_request(method=method,
+                                      url=url,
+                                      query_args=query_args,
+                                      body=body)
+        return cache[key]
 
     return caching_json_request
+
+class JsonBlobCache(object):
+    def __init__(self, cachedir):
+        self.cachedir = cachedir
+
+    def __pathforkey(self, key):
+        if not isinstance(key, basestring):
+            raise ValueError('key must be a string')
+        return os.path.join(self.cachedir, '%s.json' % key)
+
+    def __getitem__(self, key):
+        if not key in self:
+            raise KeyError(key)
+        return json.loads(open(self.__pathforkey(key)).read())
+
+    def __setitem__(self, key, value):
+        open(self.__pathforkey(key), 'w').write(json.dumps(value))
+
+    def __contains__(self, key):
+        return os.path.exists(self.__pathforkey(key))
 
 def main(config, json_request=json_request):
     print json_request('GET',
@@ -88,6 +105,6 @@ if __name__ == '__main__':
             print "Aborted."
             sys.exit(1)
 
-    cachedir = os.path.join(mydir, 'cache')
+    cache = JsonBlobCache(os.path.join(mydir, 'cache'))
     main(config=config,
-         json_request=make_caching_json_request(cachedir))
+         json_request=make_caching_json_request(cache))
