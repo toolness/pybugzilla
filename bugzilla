@@ -45,7 +45,7 @@ def json_request(method, url, query_args=None, body=None):
             'body': data}
 
 def make_caching_json_request(cachedir, json_request=json_request):
-    from hashlib import sha512 as hashfunc
+    from hashlib import sha1 as hashfunc
 
     def caching_json_request(method, url, query_args=None, body=None):
         key = repr((method, url, query_args, body))
