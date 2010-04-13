@@ -2,8 +2,10 @@
 
 import os
 import sys
+import base64
 import httplib
 import urllib
+import mimetypes
 from urlparse import urlparse
 from getpass import getpass
 
@@ -130,6 +132,32 @@ class BugzillaApi(object):
         self.config = config
         self.__jsonreq = jsonreq
 
+    def post_attachment(self, bug_id, contents, filename, description,
+                        content_type=None, is_patch=False, is_private=False,
+                        is_obsolete=False,
+                        guess_mime_type=mimetypes.guess_type):
+        if content_type is None:
+            content_type = guess_mime_type(filename)[0]
+            if not content_type:
+                raise ValueError('could not guess content type for "%s"' %
+                                 filename)
+
+        attachment = {
+            'data': base64.b64encode(contents),
+            'description': description,
+            'encoding': 'base64',
+            'file_name': filename,
+            'flags': [],
+            'is_obsolete': is_obsolete,
+            'is_patch': is_patch,
+            'is_private': is_private,
+            'size': len(contents),
+            'content_type': content_type
+            }
+
+        return self.request('POST', '/bug/%d/attachment' % bug_id,
+                            body=attachment)
+
     def request(self, method, path, query_args=None, body=None):
         if query_args is None:
             query_args = {}
@@ -159,3 +187,7 @@ if __name__ == '__main__':
     bzapi = BugzillaApi()
     print bzapi.request('GET', '/attachment/436897',
                         query_args={'attachmentdata': 1})
+    #bzapi.post_attachment(bug_id=536619,
+    #                      contents="testing!",
+    #                      filename="contents.txt",
+    #                      description="test upload")
