@@ -44,19 +44,35 @@ def json_request(method, url, query_args=None, body=None):
             'content_type': mimetype,
             'body': data}
 
-def main(config):
-    #print json_request('GET',
-    #                   '%s/attachment/436897' % config['api_server'],
-    #                   query_args={'attachmentdata': 1})
-    raise NotImplementedError()
+def make_caching_json_request(cachedir, json_request=json_request):
+    from hashlib import sha512 as hashfunc
+
+    def caching_json_request(method, url, query_args=None, body=None):
+        key = repr((method, url, query_args, body))
+        hashfile = '%s.json' % hashfunc(key).hexdigest()
+        hashpath = os.path.join(cachedir, hashfile)
+        if not os.path.exists(hashpath):
+            response = json_request(method=method,
+                                    url=url,
+                                    query_args=query_args,
+                                    body=body)
+            open(hashpath, 'w').write(json.dumps(response))
+        return json.loads(open(hashpath, 'r').read())
+
+    return caching_json_request
+
+def main(config, json_request=json_request):
+    print json_request('GET',
+                       '%s/attachment/436897' % config['api_server'],
+                       query_args={'attachmentdata': 1})
 
 if __name__ == '__main__':
     import os
     import sys
 
     mypath = __import__('__main__').__file__
-    configfile = os.path.join(os.path.dirname(mypath),
-                              'bugzilla-config.json')
+    mydir = os.path.dirname(mypath)
+    configfile = os.path.join(mydir, 'bugzilla-config.json')
     config = json.loads(open(configfile).read())
 
     if 'username' in config and 'password' not in config:
@@ -72,4 +88,6 @@ if __name__ == '__main__':
             print "Aborted."
             sys.exit(1)
 
-    main(config)
+    cachedir = os.path.join(mydir, 'cache')
+    main(config=config,
+         json_request=make_caching_json_request(cachedir))
