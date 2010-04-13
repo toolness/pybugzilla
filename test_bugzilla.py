@@ -27,7 +27,12 @@ def test_upload(self):
     ...                       filename="contents.txt",
     ...                       description="test upload")
     Called jsonreq(
-        body={'is_obsolete': False, 'flags': [], 'description': 'test upload', 'content_type': 'text/plain', 'encoding': 'base64', 'file_name': 'contents.txt', 'is_patch': False, 'data': 'dGVzdGluZyE=', 'is_private': False, 'size': 8},
+        body={'is_obsolete': False, 'flags': [],
+              'description': 'test upload',
+              'content_type': 'text/plain', 'encoding': 'base64',
+              'file_name': 'contents.txt', 'is_patch': False,
+              'data': 'dGVzdGluZyE=', 'is_private': False,
+              'size': 8},
         method='POST',
         query_args={'username': 'bar', 'password': 'baz'},
         url='http://foo/latest/bug/536619/attachment')
@@ -44,11 +49,14 @@ def get_tests_in_module(module):
     for test in suite:
         tests.append(test)
 
+    optionflags = (doctest.NORMALIZE_WHITESPACE |
+                   doctest.REPORT_UDIFF)
     finder = doctest.DocTestFinder()
     doctests = finder.find(module)
     for test in doctests:
         if len(test.examples) > 0:
-            tests.append(doctest.DocTestCase(test))
+            tests.append(doctest.DocTestCase(test,
+                                             optionflags=optionflags))
 
     return tests
 
