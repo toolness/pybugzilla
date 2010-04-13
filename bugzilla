@@ -1,13 +1,21 @@
 #! /usr/bin/env python
 
+import os
+import sys
 import httplib
 import urllib
 from urlparse import urlparse
+from getpass import getpass
 
 try:
     import json
 except ImportError:
     import simplejson as json
+
+DEFAULT_CONFIG = {
+    'api_server': 'https://api-dev.bugzilla.mozilla.org/latest',
+    'server': 'https://bugzilla.mozilla.org'
+}
 
 def json_request(method, url, query_args=None, body=None):
     if query_args is None:
@@ -78,33 +86,76 @@ class JsonBlobCache(object):
     def __contains__(self, key):
         return os.path.exists(self.__pathforkey(key))
 
-def main(config, json_request=json_request):
-    print json_request('GET',
-                       '%s/attachment/436897' % config['api_server'],
-                       query_args={'attachmentdata': 1})
+def getpass_or_die(prompt, getpass=getpass):
+    try:
+        password = getpass(prompt)
+    except KeyboardInterrupt:
+        password = None
+
+    if not password:
+        print "Aborted."
+        sys.exit(1)
+
+    return password
+
+def load_config(filename=None, getpass=getpass_or_die):
+    config = {}
+    config.update(DEFAULT_CONFIG)
+
+    if not filename:
+        filename = os.path.join('~', '.bugzilla-config.json')
+        filename = os.path.expanduser(filename)
+        if not os.path.exists(filename):
+            return config
+
+    config.update(json.loads(open(filename).read()))
+
+    if getpass and 'username' in config and 'password' not in config:
+        config['password'] = getpass('Enter password for %s: ' %
+                                     config['username'])
+    return config
+
+class BugzillaApi(object):
+    def __init__(self, config=None, jsonreq=None):
+        if config is None:
+            config = load_config()
+
+        if jsonreq is None:
+            if 'cache_dir' in config:
+                cache = JsonBlobCache(os.path.expanduser(config['cache_dir']))
+                jsonreq = make_caching_json_request(cache)
+            else:
+                jsonreq = json_request
+
+        self.config = config
+        self.__jsonreq = jsonreq
+
+    def request(self, method, path, query_args=None, body=None):
+        if query_args is None:
+            query_args = {}
+
+        if 'username' in self.config and 'password' in self.config:
+            for name in ['username', 'password']:
+                query_args[name] = self.config[name]
+
+        url = '%s%s' % (self.config['api_server'], path)
+
+        response = self.__jsonreq(method=method,
+                                  url=url,
+                                  query_args=query_args,
+                                  body=body)
+
+        if response['content_type'] == 'application/json':
+            json_response = response['body']
+            if 'error' in json_response and json_response['error']:
+                raise BugzillaApiError(response)
+            return json_response
+        raise BugzillaApiError(response)
+
+class BugzillaApiError(Exception):
+    pass
 
 if __name__ == '__main__':
-    import os
-    import sys
-
-    mypath = __import__('__main__').__file__
-    mydir = os.path.dirname(mypath)
-    configfile = os.path.join(mydir, 'bugzilla-config.json')
-    config = json.loads(open(configfile).read())
-
-    if 'username' in config and 'password' not in config:
-        from getpass import getpass
-
-        try:
-            config['password'] = getpass('Enter password for %s: ' %
-                                         config['username'])
-        except KeyboardInterrupt:
-            config['password'] = None
-
-        if not config['password']:
-            print "Aborted."
-            sys.exit(1)
-
-    cache = JsonBlobCache(os.path.join(mydir, 'cache'))
-    main(config=config,
-         json_request=make_caching_json_request(cache))
+    bzapi = BugzillaApi()
+    print bzapi.request('GET', '/attachment/436897',
+                        query_args={'attachmentdata': 1})
