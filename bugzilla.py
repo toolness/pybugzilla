@@ -249,7 +249,7 @@ class BugzillaObject(object):
 
 class User(BugzillaObject):
     """
-    >>> u = User(TEST_USER)
+    >>> u = User(TEST_USER, bzapi=None)
     >>> u.name
     u'avarma@mozilla.com'
     >>> u.real_name
@@ -272,7 +272,7 @@ class User(BugzillaObject):
         'name': unicode
         }
 
-    def __init__(self, jsonobj, bzapi=None):
+    def __init__(self, jsonobj, bzapi):
         BugzillaObject.__init__(self, jsonobj, bzapi)
         self.__email = jsonobj.get('email')
         self.__real_name = jsonobj.get('real_name')
@@ -326,7 +326,7 @@ class Attachment(BugzillaObject):
         'is_obsolete': bool
         }
 
-    def __init__(self, jsonobj, bzapi=None, bug=None):
+    def __init__(self, jsonobj, bzapi, bug=None):
         BugzillaObject.__init__(self, jsonobj, bzapi)
         if 'data' in jsonobj:
             self.__data = self.__decode_data(jsonobj)
@@ -338,20 +338,12 @@ class Attachment(BugzillaObject):
     @property
     def bug(self):
         if self.__bug is None:
-            if not self.bzapi:
-                raise AttributeError('cannot fetch bug %d for '
-                                     'attachment %d; no bzapi' %
-                                     (self.bug_id, self.id))
             self.__bug = Bug.fetch(self.bzapi, self.bug_id)
         return self.__bug
 
     @property
     def data(self):
         if self.__data is None:
-            if not self.bzapi:
-                raise AttributeError('cannot fetch data for '
-                                     'attachment %d; no bzapi' %
-                                     self.id)
             jsonobj = self.__get_full_attachment(self.bzapi, self.id)
             self.__data = self.__decode_data(jsonobj)
         return self.__data
@@ -388,7 +380,7 @@ class Attachment(BugzillaObject):
 
 class Bug(BugzillaObject):
     """
-    >>> Bug(TEST_BUG)
+    >>> Bug(TEST_BUG, bzapi=None)
     <Bug 558680 - u'Here is a summary'>
     """
 
@@ -397,7 +389,7 @@ class Bug(BugzillaObject):
         'summary': unicode
         }
 
-    def __init__(self, jsonobj, bzapi=None):
+    def __init__(self, jsonobj, bzapi):
         BugzillaObject.__init__(self, jsonobj, bzapi)
         self.attachments = [Attachment(attach, bzapi, self)
                             for attach in jsonobj['attachments']]
