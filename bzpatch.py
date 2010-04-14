@@ -64,12 +64,12 @@ def get_patch(bug):
 
     return get_patch_from_attachment(most_recent_patch)
 
-def post_patch(bzapi, bug, patch, description='patch'):
+def post_patch(bzapi, bug, patch, description):
     """
     >>> bzapi = MockBugzillaApi({'username': 'avarma@mozilla.com'})
     >>> bzapi.request.mock_returns = TEST_USER_SEARCH_RESULT
     >>> bug = bugzilla.Bug(TEST_BUG, bzapi)
-    >>> print post_patch(bzapi, bug, 'o hai')
+    >>> print post_patch(bzapi, bug, 'o hai', 'my patch')
     Called bzapi.request(
         'GET',
         '/user',
@@ -77,7 +77,7 @@ def post_patch(bzapi, bug, patch, description='patch'):
     Called bzapi.request(
         'POST',
         '/bug/558680/attachment',
-        body={'is_obsolete': False, 'flags': [], 'description': 'patch', 'content_type': 'text/plain', 'encoding': 'base64', 'file_name': 'bug-558680-patch.diff', 'is_patch': True, 'data': 'IyBIRyBjaGFuZ2VzZXQgcGF0Y2gKIyBVc2VyIEF0dWwgVmFybWEgWzphdHVsXSA8YXZhcm1hQG1vemlsbGEuY29tPgpCdWcgNTU4NjgwIC0gSGVyZSBpcyBhIHN1bW1hcnkKCm8gaGFp', 'is_private': False, 'size': 105})
+        body={'is_obsolete': False, 'flags': [], 'description': 'my patch', 'content_type': 'text/plain', 'encoding': 'base64', 'file_name': 'bug-558680-patch.diff', 'is_patch': True, 'data': 'IyBIRyBjaGFuZ2VzZXQgcGF0Y2gKIyBVc2VyIEF0dWwgVmFybWEgWzphdHVsXSA8YXZhcm1hQG1vemlsbGEuY29tPgpCdWcgNTU4NjgwIC0gSGVyZSBpcyBhIHN1bW1hcnkKCm8gaGFp', 'is_private': False, 'size': 105})
     # HG changeset patch
     # User Atul Varma [:atul] <avarma@mozilla.com>
     Bug 558680 - Here is a summary
@@ -100,7 +100,7 @@ def post_patch(bzapi, bug, patch, description='patch'):
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
-        print "usage: %s <post|get> <bug-id>" % sys.argv[0]
+        print "usage: %s <post|get> <bug-id> [desc]" % sys.argv[0]
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -115,10 +115,17 @@ if __name__ == '__main__':
         print "not a valid bug id: %s" % sys.argv[2]
         sys.exit(1)
 
+    if cmd == 'post' and len(sys.argv) < 4:
+        print "patch description required."
+        sys.exit(1)
+
     bzapi = bugzilla.BugzillaApi()
     bug = bzapi.bugs.get(bug_id)
 
     if cmd == 'get':
         sys.stdout.write(get_patch(bug))
     else:
-        post_patch(bzapi, bug, sys.stdin.read())
+        post_patch(bzapi=bzapi,
+                   bug=bug,
+                   patch=sys.stdin.read(),
+                   description=sys.argv[3])
