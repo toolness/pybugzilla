@@ -59,12 +59,13 @@ TEST_BUG = {
     u'id': u'558680'
     }
 
-class MockBugzillaApi(object):
+class MockBugzillaApi(bugzilla.BugzillaApi):
     def __init__(self):
+        bugzilla.BugzillaApi.__init__(self,
+                                      config=Mock('config'),
+                                      jsonreq=Mock('jsonreq'),
+                                      getpass=Mock('getpass'))
         self.request = Mock('bzapi.request')
-        self.users = bugzilla.LazyMapping(self, bugzilla.User, keytype=unicode)
-        self.attachments = bugzilla.LazyMapping(self, bugzilla.Attachment, keytype=int)
-        self.bugs = bugzilla.LazyMapping(self, bugzilla.Bug, keytype=int)
 
 DOCTEST_EXTRA_GLOBS = {
     'Mock': Mock,
