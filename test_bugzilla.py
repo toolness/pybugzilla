@@ -60,9 +60,11 @@ TEST_BUG = {
     }
 
 class MockBugzillaApi(bugzilla.BugzillaApi):
-    def __init__(self):
+    def __init__(self, config=None):
+        if config is None:
+            config = {}
         bugzilla.BugzillaApi.__init__(self,
-                                      config=Mock('config'),
+                                      config=config,
                                       jsonreq=Mock('jsonreq'),
                                       getpass=Mock('getpass'))
         self.request = Mock('bzapi.request')

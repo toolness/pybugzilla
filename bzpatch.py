@@ -18,16 +18,39 @@ def strip_patch_header(patch):
         return patch
     return patch[index+1:]
 
-def get_patch_with_header(attachment):
-    patch = strip_patch_header(attachment.data)
+def make_patch_header(real_name, email, bug_id, summary):
+    """
+    >>> print make_patch_header('Bob', 'bob@foo.com', 5, 'yo')
+    # HG changeset patch
+    # User Bob <bob@foo.com>
+    Bug 5 - yo
+    """
+
     lines = ['# HG changeset patch',
-             '# User %s <%s>' % (attachment.attacher.real_name,
-                                 attachment.attacher.email),
-             'Bug %d - %s' % (attachment.bug.id,
-                              attachment.bug.summary),
-             '',
-             patch]
+             '# User %s <%s>' % (real_name, email),
+             'Bug %d - %s' % (bug_id, summary)]
     return '\n'.join(lines)
+
+def make_patch(patch, real_name, email, bug_id, summary):
+    """
+    >>> print make_patch('hi', 'Bob', 'bob@foo.com', 5, 'yo')
+    # HG changeset patch
+    # User Bob <bob@foo.com>
+    Bug 5 - yo
+    <BLANKLINE>
+    hi
+    """
+
+    patch = strip_patch_header(patch)
+    header = make_patch_header(real_name, email, bug_id, summary)
+    return '\n'.join([header, '', patch])
+
+def get_patch_from_attachment(attachment):
+    return make_patch(patch=attachment.data,
+                      real_name=attachment.attacher.real_name,
+                      email=attachment.attacher.email,
+                      bug_id=attachment.bug.id,
+                      summary=attachment.bug.summary)
 
 def get_patch(bug):
     def cmp_lastcreated(a, b):
@@ -39,7 +62,41 @@ def get_patch(bug):
 
     most_recent_patch = patches[-1]
 
-    return get_patch_with_header(most_recent_patch)
+    return get_patch_from_attachment(most_recent_patch)
+
+def post_patch(bzapi, bug, patch, description='patch'):
+    """
+    >>> bzapi = MockBugzillaApi({'username': 'avarma@mozilla.com'})
+    >>> bzapi.request.mock_returns = TEST_USER_SEARCH_RESULT
+    >>> bug = bugzilla.Bug(TEST_BUG, bzapi)
+    >>> print post_patch(bzapi, bug, 'o hai')
+    Called bzapi.request(
+        'GET',
+        '/user',
+        query_args={'match': u'avarma@mozilla.com'})
+    Called bzapi.request(
+        'POST',
+        '/bug/558680/attachment',
+        body={'is_obsolete': False, 'flags': [], 'description': 'patch', 'content_type': 'text/plain', 'encoding': 'base64', 'file_name': 'bug-558680-patch.diff', 'is_patch': True, 'data': 'IyBIRyBjaGFuZ2VzZXQgcGF0Y2gKIyBVc2VyIEF0dWwgVmFybWEgWzphdHVsXSA8YXZhcm1hQG1vemlsbGEuY29tPgpCdWcgNTU4NjgwIC0gSGVyZSBpcyBhIHN1bW1hcnkKCm8gaGFp', 'is_private': False, 'size': 105})
+    # HG changeset patch
+    # User Atul Varma [:atul] <avarma@mozilla.com>
+    Bug 558680 - Here is a summary
+    <BLANKLINE>
+    o hai
+    """
+
+    full_patch = make_patch(patch=patch,
+                            real_name=bzapi.current_user.real_name,
+                            email=bzapi.current_user.email,
+                            bug_id=bug.id,
+                            summary=bug.summary)
+    bzapi.attachments.post(bug_id=bug.id,
+                           contents=full_patch,
+                           filename="bug-%d-patch.diff" % bug.id,
+                           description=description,
+                           content_type='text/plain',
+                           is_patch=True)
+    return full_patch
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
@@ -62,6 +119,6 @@ if __name__ == '__main__':
     bug = bzapi.bugs.get(bug_id)
 
     if cmd == 'get':
-        print get_patch(bug)
+        sys.stdout.write(get_patch(bug))
     else:
-        raise NotImplementedError('TODO: finish this!')
+        post_patch(bzapi, bug, sys.stdin.read())

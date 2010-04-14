@@ -137,6 +137,12 @@ class BugzillaApi(object):
         self.bugs = LazyMapping(self, Bug, keytype=int)
         self.attachments = Attachments(self)
 
+    @property
+    def current_user(self):
+        # TODO: Deal more gracefully w/ case where user isn't
+        # logged-in.
+        return self.users.get(self.config['username'])
+
     def request(self, method, path, query_args=None, body=None):
         if query_args is None:
             query_args = {}
@@ -296,6 +302,9 @@ class User(BugzillaObject):
         query_args={'match': u'avarma@mozilla.com'})
     u'Atul Varma [:atul]'
     """
+
+    # TODO: This class currently assumes that the bzapi is
+    # authenticated (i.e., a user is logged-in).
 
     __bzprops__ = {
         'name': unicode
