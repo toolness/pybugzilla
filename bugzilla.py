@@ -247,6 +247,22 @@ class BugzillaObject(object):
                 raise ValueError("bad proptype for '%s': %s" %
                                  name, repr(proptype))
 
+class LazyMapping(object):
+    def __init__(self, bzapi, klass):
+        self.__klass = klass
+        self.__bzapi = bzapi
+        self.__mapping = {}
+
+    def get(self, name, jsonobj=None):
+        if name not in self.__mapping:
+            if jsonobj:
+                obj = self.__klass(jsonobj, self.__bzapi)
+            else:
+                obj = self.__klass.fetch(self.__bzapi, name)
+            self.mapping[name] = obj
+
+        return self.__mapping[name]
+
 class User(BugzillaObject):
     """
     >>> u = User(TEST_USER, bzapi=None)
@@ -278,17 +294,9 @@ class User(BugzillaObject):
         self.__real_name = jsonobj.get('real_name')
 
     def __fulfill(self):
-        response = self.bzapi.request('GET', '/user',
-                                      query_args={'match': self.name})
-        users = response['users']
-        if len(users) > 1:
-            raise BugzillaApiError("more than one user found for "
-                                   "name '%s'" % self.name)
-        elif not users:
-            raise BugzillaApiError("no users found for "
-                                   "name '%s'" % self.name)
-        self.__email = users[0]['email']
-        self.__real_name = users[0]['real_name']
+        user = self.__get_user(self.bzapi, self.name)
+        self.__email = user['email']
+        self.__real_name = user['real_name']
 
     @property
     def email(self):
@@ -301,6 +309,35 @@ class User(BugzillaObject):
         if self.__real_name is None:
             self.__fulfill()
         return self.__real_name
+
+    def __repr__(self):
+        return '<User %s>' % repr(self.name)
+
+    @staticmethod
+    def __get_user(bzapi, name):
+        response = bzapi.request('GET', '/user',
+                                 query_args={'match': name})
+        users = response['users']
+        if len(users) > 1:
+            raise BugzillaApiError("more than one user found for "
+                                   "name '%s'" % name)
+        elif not users:
+            raise BugzillaApiError("no users found for "
+                                   "name '%s'" % name)
+        return users[0]
+
+    @classmethod
+    def fetch(klass, bzapi, name):
+        """
+        >>> bzapi = Mock('bzapi')
+        >>> bzapi.request.mock_returns = TEST_USER_SEARCH_RESULT
+        >>> User.fetch(bzapi, 'avarma@mozilla.com')
+        Called bzapi.request('GET', '/user',
+                             query_args={'match': 'avarma@mozilla.com'})
+        <User u'avarma@mozilla.com'>
+        """
+
+        return klass(klass.__get_user(bzapi, name), bzapi)
 
 class Attachment(BugzillaObject):
     """
