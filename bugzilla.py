@@ -122,7 +122,7 @@ class BugzillaApi(object):
     def __init__(self, config=None, jsonreq=None,
                  getpass=getpass_or_die):
         if config is None:
-            config = load_config()
+            config = load_config(getpass=getpass)
 
         if jsonreq is None:
             if 'cache_dir' in config:
@@ -243,6 +243,62 @@ class BugzillaObject(object):
                 raise ValueError("bad proptype for '%s': %s" %
                                  name, repr(proptype))
 
+class User(BugzillaObject):
+    """
+    >>> u = User(TEST_USER)
+    >>> u.name
+    u'avarma@mozilla.com'
+    >>> u.real_name
+    u'Atul Varma [:atul]'
+    >>> u.email
+    u'avarma@mozilla.com'
+
+    >>> bzapi = Mock('bzapi')
+    >>> bzapi.request.mock_returns = TEST_USER_SEARCH_RESULT
+    >>> u = User({'name': 'avarma@mozilla.com'}, bzapi)
+    >>> u.real_name
+    Called bzapi.request(
+        'GET',
+        '/user',
+        query_args={'match': u'avarma@mozilla.com'})
+    u'Atul Varma [:atul]'
+    """
+
+    __bzprops__ = {
+        'name': unicode
+        }
+
+    def __init__(self, jsonobj, bzapi=None):
+        self.bzapi = bzapi
+        self.__email = jsonobj.get('email')
+        self.__real_name = jsonobj.get('real_name')
+        self._set_bzprops(jsonobj)
+
+    def __fulfill(self):
+        response = self.bzapi.request('GET', '/user',
+                                      query_args={'match': self.name})
+        users = response['users']
+        if len(users) > 1:
+            raise BugzillaApiError("more than one user found for "
+                                   "name '%s'" % self.name)
+        elif not users:
+            raise BugzillaApiError("no users found for "
+                                   "name '%s'" % self.name)
+        self.__email = users[0]['email']
+        self.__real_name = users[0]['real_name']
+
+    @property
+    def email(self):
+        if self.__email is None:
+            self.__fulfill()
+        return self.__email
+
+    @property
+    def real_name(self):
+        if self.__real_name is None:
+            self.__fulfill()
+        return self.__real_name
+
 class Attachment(BugzillaObject):
     """
     >>> bzapi = Mock('bzapi')
@@ -258,23 +314,42 @@ class Attachment(BugzillaObject):
 
     __bzprops__ = {
         'id': int,
+        'bug_id': int,
         'last_change_time': datetime.datetime,
         'creation_time': datetime.datetime,
         'description': unicode,
-        'content_type': str
+        'content_type': str,
+        'is_patch': bool,
+        'is_obsolete': bool
         }
 
-    def __init__(self, jsonobj, bzapi=None):
+    def __init__(self, jsonobj, bzapi=None, bug=None):
         self._set_bzprops(jsonobj)
         self.bzapi = bzapi
         if 'data' in jsonobj:
             self.__data = self.__decode_data(jsonobj)
         else:
             self.__data = None
+        self.__bug = bug
+        self.attacher = User(jsonobj['attacher'], bzapi)
+
+    @property
+    def bug(self):
+        if self.__bug is None:
+            if not self.bzapi:
+                raise AttributeError('cannot fetch bug %d for '
+                                     'attachment %d; no bzapi' %
+                                     (self.bug_id, self.id))
+            self.__bug = Bug.fetch(self.bzapi, self.bug_id)
+        return self.__bug
 
     @property
     def data(self):
-        if self.__data is None and self.bzapi:
+        if self.__data is None:
+            if not self.bzapi:
+                raise AttributeError('cannot fetch data for '
+                                     'attachment %d; no bzapi' %
+                                     self.id)
             jsonobj = self.__get_full_attachment(self.bzapi, self.id)
             self.__data = self.__decode_data(jsonobj)
         return self.__data
@@ -306,7 +381,8 @@ class Attachment(BugzillaObject):
         <Attachment 438797 - u'test upload'>
         """
 
-        return klass(klass.__get_full_attachment(bzapi, attach_id))
+        return klass(klass.__get_full_attachment(bzapi, attach_id),
+                     bzapi)
 
 class Bug(BugzillaObject):
     """
@@ -319,9 +395,9 @@ class Bug(BugzillaObject):
         'summary': unicode
         }
 
-    def __init__(self, jsonobj):
+    def __init__(self, jsonobj, bzapi=None):
         self._set_bzprops(jsonobj)
-        self.attachments = [Attachment(attach)
+        self.attachments = [Attachment(attach, bzapi, self)
                             for attach in jsonobj['attachments']]
 
     def __repr__(self):
@@ -337,13 +413,4 @@ class Bug(BugzillaObject):
         <Bug 558680 - u'Here is a summary'>
         """
 
-        return klass(bzapi.request('GET', '/bug/%d' % bug_id))
-
-if __name__ == '__main__':
-    bzapi = BugzillaApi()
-    print bzapi.request('GET', '/attachment/436897',
-                        query_args={'attachmentdata': 1})
-    #bzapi.post_attachment(bug_id=536619,
-    #                      contents="testing!",
-    #                      filename="contents.txt",
-    #                      description="test upload")
+        return klass(bzapi.request('GET', '/bug/%d' % bug_id), bzapi)

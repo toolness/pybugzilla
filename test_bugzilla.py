@@ -9,6 +9,16 @@ TEST_CFG_WITH_LOGIN = {'api_server': 'http://foo/latest',
                        'username': 'bar',
                        'password': 'baz'}
 
+TEST_USER = {
+    u'email': u'avarma@mozilla.com', u'real_name': u'Atul Varma [:atul]',
+    u'can_login': u'1', u'name': u'avarma@mozilla.com',
+    u'id': u'298253'
+    }
+
+TEST_USER_SEARCH_RESULT = {
+    u'users': [TEST_USER]
+}
+
 TEST_ATTACHMENT_WITHOUT_DATA = {
     u'is_obsolete': u'0',
     u'description': u'test upload', u'encoding': u'base64',
