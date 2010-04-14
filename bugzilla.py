@@ -134,61 +134,8 @@ class BugzillaApi(object):
         self.config = config
         self.__jsonreq = jsonreq
         self.users = LazyMapping(self, User, keytype=unicode)
-        self.attachments = LazyMapping(self, Attachment, keytype=int)
         self.bugs = LazyMapping(self, Bug, keytype=int)
-
-    def post_attachment(self, bug_id, contents, filename, description,
-                        content_type=None, is_patch=False, is_private=False,
-                        is_obsolete=False,
-                        guess_mime_type=mimetypes.guess_type):
-        """
-        >>> jsonreq = Mock('jsonreq')
-        >>> jsonreq.mock_returns = {
-        ...   "status": 201,
-        ...   "body": {"ref": "http://foo/latest/attachment/1"},
-        ...   "reason": "Created",
-        ...   "content_type": "application/json"
-        ... }
-        >>> bzapi = BugzillaApi(config=TEST_CFG_WITH_LOGIN,
-        ...                     jsonreq=jsonreq)
-        >>> bzapi.post_attachment(bug_id=536619,
-        ...                       contents="testing!",
-        ...                       filename="contents.txt",
-        ...                       description="test upload")
-        Called jsonreq(
-            body={'is_obsolete': False, 'flags': [],
-                  'description': 'test upload',
-                  'content_type': 'text/plain', 'encoding': 'base64',
-                  'file_name': 'contents.txt', 'is_patch': False,
-                  'data': 'dGVzdGluZyE=', 'is_private': False,
-                  'size': 8},
-            method='POST',
-            query_args={'username': 'bar', 'password': 'baz'},
-            url='http://foo/latest/bug/536619/attachment')
-        {'ref': 'http://foo/latest/attachment/1'}
-        """
-
-        if content_type is None:
-            content_type = guess_mime_type(filename)[0]
-            if not content_type:
-                raise ValueError('could not guess content type for "%s"' %
-                                 filename)
-
-        attachment = {
-            'data': base64.b64encode(contents),
-            'description': description,
-            'encoding': 'base64',
-            'file_name': filename,
-            'flags': [],
-            'is_obsolete': is_obsolete,
-            'is_patch': is_patch,
-            'is_private': is_private,
-            'size': len(contents),
-            'content_type': content_type
-            }
-
-        return self.request('POST', '/bug/%d/attachment' % bug_id,
-                            body=attachment)
+        self.attachments = Attachments(self)
 
     def request(self, method, path, query_args=None, body=None):
         if query_args is None:
@@ -256,8 +203,8 @@ class BugzillaObject(object):
 
 class LazyMapping(object):
     def __init__(self, bzapi, klass, keytype):
+        self.bzapi = bzapi
         self.__klass = klass
-        self.__bzapi = bzapi
         self.__keytype = keytype
         self.__mapping = {}
 
@@ -265,12 +212,69 @@ class LazyMapping(object):
         name = self.__keytype(name)
         if name not in self.__mapping:
             if jsonobj:
-                obj = self.__klass(jsonobj, self.__bzapi)
+                obj = self.__klass(jsonobj, self.bzapi)
             else:
-                obj = self.__klass.fetch(self.__bzapi, name)
+                obj = self.__klass.fetch(self.bzapi, name)
             self.__mapping[name] = obj
 
         return self.__mapping[name]
+
+class Attachments(LazyMapping):
+    def __init__(self, bzapi):
+        LazyMapping.__init__(self, bzapi, Attachment, int)
+
+    def post(self, bug_id, contents, filename, description,
+             content_type=None, is_patch=False, is_private=False,
+             is_obsolete=False,
+             guess_mime_type=mimetypes.guess_type):
+        """
+        >>> jsonreq = Mock('jsonreq')
+        >>> jsonreq.mock_returns = {
+        ...   "status": 201,
+        ...   "body": {"ref": "http://foo/latest/attachment/1"},
+        ...   "reason": "Created",
+        ...   "content_type": "application/json"
+        ... }
+        >>> bzapi = BugzillaApi(config=TEST_CFG_WITH_LOGIN,
+        ...                     jsonreq=jsonreq)
+        >>> bzapi.attachments.post(bug_id=536619,
+        ...                        contents="testing!",
+        ...                        filename="contents.txt",
+        ...                        description="test upload")
+        Called jsonreq(
+            body={'is_obsolete': False, 'flags': [],
+                  'description': 'test upload',
+                  'content_type': 'text/plain', 'encoding': 'base64',
+                  'file_name': 'contents.txt', 'is_patch': False,
+                  'data': 'dGVzdGluZyE=', 'is_private': False,
+                  'size': 8},
+            method='POST',
+            query_args={'username': 'bar', 'password': 'baz'},
+            url='http://foo/latest/bug/536619/attachment')
+        {'ref': 'http://foo/latest/attachment/1'}
+        """
+
+        if content_type is None:
+            content_type = guess_mime_type(filename)[0]
+            if not content_type:
+                raise ValueError('could not guess content type for "%s"' %
+                                 filename)
+
+        attachment = {
+            'data': base64.b64encode(contents),
+            'description': description,
+            'encoding': 'base64',
+            'file_name': filename,
+            'flags': [],
+            'is_obsolete': is_obsolete,
+            'is_patch': is_patch,
+            'is_private': is_private,
+            'size': len(contents),
+            'content_type': content_type
+            }
+
+        return self.bzapi.request('POST', '/bug/%d/attachment' % bug_id,
+                                  body=attachment)
 
 class User(BugzillaObject):
     """
