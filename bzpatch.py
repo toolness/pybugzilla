@@ -29,11 +29,7 @@ def get_patch_with_header(attachment):
              patch]
     return '\n'.join(lines)
 
-if __name__ == '__main__':
-    bug_id = int(sys.argv[1])
-    bzapi = bugzilla.BugzillaApi()
-    bug = bugzilla.Bug.fetch(bzapi, bug_id)
-
+def get_patch(bug):
     def cmp_lastcreated(a, b):
         return cmp(a.creation_time, b.creation_time)
 
@@ -43,4 +39,29 @@ if __name__ == '__main__':
 
     most_recent_patch = patches[-1]
 
-    print get_patch_with_header(most_recent_patch)
+    return get_patch_with_header(most_recent_patch)
+
+if __name__ == '__main__':
+    if len(sys.argv) < 3:
+        print "usage: %s <post|get> <bug-id>" % sys.argv[0]
+        sys.exit(1)
+
+    cmd = sys.argv[1]
+
+    if cmd not in ['get', 'post']:
+        print "unrecognized command: %s" % cmd
+        sys.exit(1)
+
+    try:
+        bug_id = int(sys.argv[2])
+    except ValueError:
+        print "not a valid bug id: %s" % sys.argv[2]
+        sys.exit(1)
+
+    bzapi = bugzilla.BugzillaApi()
+    bug = bzapi.bugs.get(bug_id)
+
+    if cmd == 'get':
+        print get_patch(bug)
+    else:
+        raise NotImplementedError('TODO: finish this!')
