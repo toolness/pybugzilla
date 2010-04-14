@@ -133,6 +133,9 @@ class BugzillaApi(object):
 
         self.config = config
         self.__jsonreq = jsonreq
+        self.users = LazyMapping(self, User, keytype=unicode)
+        self.attachments = LazyMapping(self, Attachment, keytype=int)
+        self.bugs = LazyMapping(self, Bug, keytype=int)
 
     def post_attachment(self, bug_id, contents, filename, description,
                         content_type=None, is_patch=False, is_private=False,
@@ -230,6 +233,10 @@ class BugzillaObject(object):
 
     def _set_bzprops(self, jsonobj):
         for name, proptype in self.__bzprops__.items():
+            if name not in jsonobj:
+                raise KeyError("key '%s' not found in JSON "
+                               "%s object" % (name,
+                                              self.__class__.__name__))
             if proptype == bool:
                 if jsonobj[name] == '0':
                     setattr(self, name, False)
@@ -248,18 +255,20 @@ class BugzillaObject(object):
                                  name, repr(proptype))
 
 class LazyMapping(object):
-    def __init__(self, bzapi, klass):
+    def __init__(self, bzapi, klass, keytype):
         self.__klass = klass
         self.__bzapi = bzapi
+        self.__keytype = keytype
         self.__mapping = {}
 
     def get(self, name, jsonobj=None):
+        name = self.__keytype(name)
         if name not in self.__mapping:
             if jsonobj:
                 obj = self.__klass(jsonobj, self.__bzapi)
             else:
                 obj = self.__klass.fetch(self.__bzapi, name)
-            self.mapping[name] = obj
+            self.__mapping[name] = obj
 
         return self.__mapping[name]
 
@@ -341,7 +350,7 @@ class User(BugzillaObject):
 
 class Attachment(BugzillaObject):
     """
-    >>> bzapi = Mock('bzapi')
+    >>> bzapi = MockBugzillaApi()
     >>> bzapi.request.mock_returns = TEST_ATTACHMENT_WITH_DATA
     >>> a = Attachment(TEST_ATTACHMENT_WITHOUT_DATA, bzapi)
     >>> a.data
@@ -363,20 +372,18 @@ class Attachment(BugzillaObject):
         'is_obsolete': bool
         }
 
-    def __init__(self, jsonobj, bzapi, bug=None):
+    def __init__(self, jsonobj, bzapi):
         BugzillaObject.__init__(self, jsonobj, bzapi)
         if 'data' in jsonobj:
             self.__data = self.__decode_data(jsonobj)
         else:
             self.__data = None
-        self.__bug = bug
-        self.attacher = User(jsonobj['attacher'], bzapi)
+        self.attacher = self.bzapi.users.get(jsonobj['attacher']['name'],
+                                             jsonobj['attacher'])
 
     @property
     def bug(self):
-        if self.__bug is None:
-            self.__bug = Bug.fetch(self.bzapi, self.bug_id)
-        return self.__bug
+        return self.bzapi.bugs.get(self.bug_id)
 
     @property
     def data(self):
@@ -402,7 +409,7 @@ class Attachment(BugzillaObject):
     @classmethod
     def fetch(klass, bzapi, attach_id):
         """
-        >>> bzapi = Mock('bzapi')
+        >>> bzapi = MockBugzillaApi()
         >>> bzapi.request.mock_returns = TEST_ATTACHMENT_WITH_DATA
         >>> Attachment.fetch(bzapi, 438797)
         Called bzapi.request(
@@ -417,7 +424,7 @@ class Attachment(BugzillaObject):
 
 class Bug(BugzillaObject):
     """
-    >>> Bug(TEST_BUG, bzapi=None)
+    >>> Bug(TEST_BUG, MockBugzillaApi())
     <Bug 558680 - u'Here is a summary'>
     """
 
@@ -428,7 +435,7 @@ class Bug(BugzillaObject):
 
     def __init__(self, jsonobj, bzapi):
         BugzillaObject.__init__(self, jsonobj, bzapi)
-        self.attachments = [Attachment(attach, bzapi, self)
+        self.attachments = [bzapi.attachments.get(attach['id'], attach)
                             for attach in jsonobj['attachments']]
 
     def __repr__(self):
@@ -437,7 +444,7 @@ class Bug(BugzillaObject):
     @classmethod
     def fetch(klass, bzapi, bug_id):
         """
-        >>> bzapi = Mock('bzapi')
+        >>> bzapi = MockBugzillaApi()
         >>> bzapi.request.mock_returns = TEST_BUG
         >>> Bug.fetch(bzapi, 558680)
         Called bzapi.request('GET', '/bug/558680')
