@@ -224,6 +224,10 @@ def iso8601_to_datetime(timestamp):
 class BugzillaObject(object):
     __bzprops__ = {}
 
+    def __init__(self, jsonobj, bzapi):
+        self._set_bzprops(jsonobj)
+        self.bzapi = bzapi
+
     def _set_bzprops(self, jsonobj):
         for name, proptype in self.__bzprops__.items():
             if proptype == bool:
@@ -269,10 +273,9 @@ class User(BugzillaObject):
         }
 
     def __init__(self, jsonobj, bzapi=None):
-        self.bzapi = bzapi
+        BugzillaObject.__init__(self, jsonobj, bzapi)
         self.__email = jsonobj.get('email')
         self.__real_name = jsonobj.get('real_name')
-        self._set_bzprops(jsonobj)
 
     def __fulfill(self):
         response = self.bzapi.request('GET', '/user',
@@ -324,8 +327,7 @@ class Attachment(BugzillaObject):
         }
 
     def __init__(self, jsonobj, bzapi=None, bug=None):
-        self._set_bzprops(jsonobj)
-        self.bzapi = bzapi
+        BugzillaObject.__init__(self, jsonobj, bzapi)
         if 'data' in jsonobj:
             self.__data = self.__decode_data(jsonobj)
         else:
@@ -396,7 +398,7 @@ class Bug(BugzillaObject):
         }
 
     def __init__(self, jsonobj, bzapi=None):
-        self._set_bzprops(jsonobj)
+        BugzillaObject.__init__(self, jsonobj, bzapi)
         self.attachments = [Attachment(attach, bzapi, self)
                             for attach in jsonobj['attachments']]
 
