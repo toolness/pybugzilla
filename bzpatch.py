@@ -13,8 +13,19 @@ def strip_patch_header(patch):
 
     >>> strip_patch_header('sup')
     'sup'
+
+    >>> print strip_patch_header('diff --git\\n'
+    ...                          'bleh\\n'
+    ...                          'diff --git\\n'
+    ...                          'yo')
+    diff --git
+    bleh
+    diff --git
+    yo
     """
-    
+
+    if patch.startswith('diff'):
+        return patch
     index = patch.find('\ndiff')
     if index == -1:
         return patch
