@@ -59,6 +59,11 @@ TEST_BUG = {
     u'id': u'558680'
     }
 
+TEST_BUG_NO_ATTACHMENTS = {
+    u'summary': u'Here is another summary',
+    u'id': u'558681'
+    }
+
 class MockBugzillaApi(bugzilla.BugzillaApi):
     def __init__(self, config=None):
         if config is None:

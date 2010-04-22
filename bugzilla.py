@@ -439,6 +439,9 @@ class Bug(BugzillaObject):
     """
     >>> Bug(TEST_BUG, MockBugzillaApi())
     <Bug 558680 - u'Here is a summary'>
+
+    >>> Bug(TEST_BUG_NO_ATTACHMENTS, MockBugzillaApi())
+    <Bug 558681 - u'Here is another summary'>
     """
 
     __bzprops__ = {
@@ -449,7 +452,8 @@ class Bug(BugzillaObject):
     def __init__(self, jsonobj, bzapi):
         BugzillaObject.__init__(self, jsonobj, bzapi)
         self.attachments = [bzapi.attachments.get(attach['id'], attach)
-                            for attach in jsonobj['attachments']]
+                            for attach in jsonobj.get('attachments',
+                                                      [])]
 
     def __repr__(self):
         return '<Bug %d - %s>' % (self.id, repr(self.summary))
