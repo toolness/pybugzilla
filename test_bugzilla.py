@@ -85,8 +85,14 @@ for globname in globals().keys():
 del globname
 
 class Tests(unittest.TestCase):
-    # TODO: Add unit tests here.
-    pass
+    def test_bool(self):
+        class Foo(bugzilla.BugzillaObject):
+            __bzprops__ = {'foo': bool}
+
+        self.assertEqual(Foo({'foo': True}, None).foo, True)
+        self.assertEqual(Foo({'foo': False}, None).foo, False)
+        self.assertEqual(Foo({'foo': '0'}, None).foo, False)
+        self.assertEqual(Foo({'foo': '1'}, None).foo, True)
 
 def get_tests_in_module(module):
     tests = []

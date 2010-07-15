@@ -191,7 +191,9 @@ class BugzillaObject(object):
                                "%s object" % (name,
                                               self.__class__.__name__))
             if proptype == bool:
-                if jsonobj[name] == '0':
+                if isinstance(jsonobj[name], bool):
+                    setattr(self, name, jsonobj[name])
+                elif jsonobj[name] == '0':
                     setattr(self, name, False)
                 elif jsonobj[name] == '1':
                     setattr(self, name, True)
