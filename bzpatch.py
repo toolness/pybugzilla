@@ -6,6 +6,21 @@ import base64
 
 import bugzilla
 
+PULL_REQ_TEMPLATE = """<!DOCTYPE html>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="5;{URL}">
+<title>Bugzilla Code Review</title>
+<p>You can review this patch at <a href="{URL}">{URL}</a>,
+or wait 5 seconds to be redirected there automatically.</p>"""
+
+def make_pull_req_html(url):
+    """
+    >>> make_pull_req_html('http://foo.com/pull/1')
+    '<!DOCTYPE html>\\n<meta charset="utf-8">\\n<meta http-equiv="refresh" content="5;http://foo.com/pull/1">\\n<title>Bugzilla Code Review</title>\\n<p>You can review this patch at <a href="http://foo.com/pull/1">http://foo.com/pull/1</a>,\\nor wait 5 seconds to be redirected there automatically.</p>'
+    """
+
+    return PULL_REQ_TEMPLATE.replace("{URL}", url)
+
 def strip_patch_header(patch):
     """
     >>> strip_patch_header('#HG blarg\\n\\ndiff --git\\n')
@@ -111,14 +126,33 @@ def post_patch(bzapi, bug, patch, description):
                            is_patch=True)
     return full_patch
 
+def post_pullreq(bzapi, bug, url):
+    """
+    >>> bzapi = MockBugzillaApi({'username': 'avarma@mozilla.com'})
+    >>> bug = bugzilla.Bug(TEST_BUG, bzapi)
+    >>> post_pullreq(bzapi, bug, 'http://foo.com/pull/1')
+    Called bzapi.request(
+        'POST',
+        '/bug/558680/attachment',
+        body={'is_obsolete': False, 'flags': [], 'description': 'Pointer to pull request', 'content_type': 'text/html', 'encoding': 'base64', 'file_name': 'bug-558680-pullreq.html', 'is_patch': False, 'data': 'PCFET0NUWVBFIGh0bWw+CjxtZXRhIGNoYXJzZXQ9InV0Zi04Ij4KPG1ldGEgaHR0cC1lcXVpdj0icmVmcmVzaCIgY29udGVudD0iNTtodHRwOi8vZm9vLmNvbS9wdWxsLzEiPgo8dGl0bGU+QnVnemlsbGEgQ29kZSBSZXZpZXc8L3RpdGxlPgo8cD5Zb3UgY2FuIHJldmlldyB0aGlzIHBhdGNoIGF0IDxhIGhyZWY9Imh0dHA6Ly9mb28uY29tL3B1bGwvMSI+aHR0cDovL2Zvby5jb20vcHVsbC8xPC9hPiwKb3Igd2FpdCA1IHNlY29uZHMgdG8gYmUgcmVkaXJlY3RlZCB0aGVyZSBhdXRvbWF0aWNhbGx5LjwvcD4=', 'is_private': False, 'size': 287})
+    """
+
+    bzapi.attachments.post(bug_id=bug.id,
+                           contents=make_pull_req_html(url),
+                           filename="bug-%d-pullreq.html" % bug.id,
+                           description="Pointer to pull request",
+                           content_type="text/html")
+
 if __name__ == '__main__':
     if len(sys.argv) < 3:
-        print "usage: %s <post|get> <bug-id> [desc]" % sys.argv[0]
+        print "usage: %s <post|get|pullreq> <bug-id> [desc] [url]" % (
+              sys.argv[0]
+              )
         sys.exit(1)
 
     cmd = sys.argv[1]
 
-    if cmd not in ['get', 'post']:
+    if cmd not in ['get', 'post', 'pullreq']:
         print "unrecognized command: %s" % cmd
         sys.exit(1)
 
@@ -128,17 +162,25 @@ if __name__ == '__main__':
         print "not a valid bug id: %s" % sys.argv[2]
         sys.exit(1)
 
-    if cmd == 'post' and len(sys.argv) < 4:
-        print "patch description required."
-        sys.exit(1)
+    if len(sys.argv) < 4:
+        if cmd == 'post':
+            print "patch description required."
+            sys.exit(1)
+        elif cmd == 'pullreq':
+            print "pull request URL required."
+            sys.exit(1)
 
     bzapi = bugzilla.BugzillaApi()
     bug = bzapi.bugs.get(bug_id)
 
     if cmd == 'get':
         sys.stdout.write(get_patch(bug))
-    else:
+    elif cmd == 'post':
         post_patch(bzapi=bzapi,
                    bug=bug,
                    patch=sys.stdin.read(),
                    description=sys.argv[3])
+    elif cmd == 'pullreq':
+        post_pullreq(bzapi=bzapi,
+                     bug=bug,
+                     url=sys.argv[3])
