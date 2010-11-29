@@ -19,6 +19,8 @@ If you really don't like the idea of leaving your Bugzilla password in a plainte
 
 # Usage
 
+You can run `bzpatch` without any command-line options to get a bit of help.
+
 ## Posting or applying a patch
 
 Assuming you're in a Mercurial repository and have made some changes to it, you can pipe `hg diff` output into `bzpatch post` like so:
@@ -35,7 +37,7 @@ You can apply the above patch by piping the output of `bzpatch get`:
 
 Note that once the patch is imported, the changeset author is already set to your Bugzilla username/email, and the changeset description contains the name and number of the bug, thanks to the HG-specific headers that were in the patch file.
 
-Note that `bzpatch get` automatically retrieves that most recently uploaded patch, if multiple ones are found.
+Note that `bzpatch get` automatically retrieves the most recently-uploaded patch, if multiple ones are found.
 
 ## Posting a pointer to a GitHub pull request
 
