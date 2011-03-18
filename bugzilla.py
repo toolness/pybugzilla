@@ -233,7 +233,7 @@ class Attachments(LazyMapping):
 
     def post(self, bug_id, contents, filename, description,
              content_type=None, is_patch=False, is_private=False,
-             is_obsolete=False,
+             is_obsolete=False, flags=None,
              guess_mime_type=mimetypes.guess_type):
         """
         >>> jsonreq = Mock('jsonreq')
@@ -268,12 +268,15 @@ class Attachments(LazyMapping):
                 raise ValueError('could not guess content type for "%s"' %
                                  filename)
 
+        if flags is None:
+            flags = []
+
         attachment = {
             'data': base64.b64encode(contents),
             'description': description,
             'encoding': 'base64',
             'file_name': filename,
-            'flags': [],
+            'flags': flags,
             'is_obsolete': is_obsolete,
             'is_patch': is_patch,
             'is_private': is_private,
