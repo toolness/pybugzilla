@@ -29,7 +29,12 @@ Assuming you're in a Mercurial repository and have made some changes to it, you 
 
 This posts the diff as a patch attachment to bug 12345 with the name/description "first patch attempt". The patch also contains HG-specific headers that provide information about the author, bug number, and bug summary.
 
-Note that `bzpatch post` doesn't actually request review from anyone; nor does it automatically obsolete any earlier patches.
+To request review, pass in the name or email address of the requestee:
+
+    hg diff | bzpatch post 12345 "first patch attempt" :atul
+    hg diff | bzpatch post 12345 "first patch attempt" avarma@mozilla.com
+
+Note that `bzpatch post` doesn't automatically obsolete any earlier patches.
 
 You can apply the above patch by piping the output of `bzpatch get`:
 
@@ -47,6 +52,11 @@ To automatically post such a request, you can do this:
 
     bzpatch pullreq 610816 https://github.com/mozilla/addon-sdk/pull/49
 
-Note that, like `bzpatch post`, this command doesn't automatically request review or obsolete older attachments.
+To request review, pass in the name or email address of the requestee:
+
+    bzpatch pullreq 610816 https://github.com/mozilla/addon-sdk/pull/49 :atul
+    bzpatch pullreq 610816 https://github.com/mozilla/addon-sdk/pull/49 avarma@mozilla.com
+
+Note that, like `bzpatch post`, this command doesn't automatically obsoletes older attachments.
 
   [bug 610816]: https://bugzilla.mozilla.org/show_bug.cgi?id=610816

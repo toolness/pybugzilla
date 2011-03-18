@@ -3,6 +3,7 @@
 import sys
 import datetime
 import base64
+import optparse
 
 import bugzilla
 
@@ -92,7 +93,7 @@ def get_patch(bug):
 
     return get_patch_from_attachment(most_recent_patch)
 
-def post_patch(bzapi, bug, patch, description):
+def post_patch(bzapi, bug, patch, description, flags=None):
     """
     >>> bzapi = MockBugzillaApi({'username': 'avarma@mozilla.com'})
     >>> bzapi.request.mock_returns = TEST_USER_SEARCH_RESULT
@@ -123,10 +124,11 @@ def post_patch(bzapi, bug, patch, description):
                            filename="bug-%d-patch.diff" % bug.id,
                            description=description,
                            content_type='text/plain',
-                           is_patch=True)
+                           is_patch=True,
+                           flags=flags)
     return full_patch
 
-def post_pullreq(bzapi, bug, url):
+def post_pullreq(bzapi, bug, url, flags=None):
     """
     >>> bzapi = MockBugzillaApi({'username': 'avarma@mozilla.com'})
     >>> bug = bugzilla.Bug(TEST_BUG, bzapi)
@@ -141,13 +143,13 @@ def post_pullreq(bzapi, bug, url):
                            contents=make_pull_req_html(url),
                            filename="bug-%d-pullreq.html" % bug.id,
                            description="Pointer to pull request",
+                           flags=flags,
                            content_type="text/html")
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
-        print "usage: %s <post|get|pullreq> <bug-id> [desc] [url]" % (
-              sys.argv[0]
-              )
+        print ("usage: %s <post|get|pullreq> <bug-id> [desc] [url] "
+               "[review requestee]" % sys.argv[0])
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -170,6 +172,13 @@ if __name__ == '__main__':
             print "pull request URL required."
             sys.exit(1)
 
+    flags = []
+    if len(sys.argv) >= 5:
+        flags = [{"type_id": 4,
+                  "name": "review",
+                  "requestee": {"name": sys.argv[4]},
+                  "status": "?"}]
+
     bzapi = bugzilla.BugzillaApi()
     bug = bzapi.bugs.get(bug_id)
 
@@ -179,8 +188,10 @@ if __name__ == '__main__':
         post_patch(bzapi=bzapi,
                    bug=bug,
                    patch=sys.stdin.read(),
-                   description=sys.argv[3])
+                   description=sys.argv[3],
+                   flags=flags)
     elif cmd == 'pullreq':
         post_pullreq(bzapi=bzapi,
                      bug=bug,
-                     url=sys.argv[3])
+                     url=sys.argv[3],
+                     flags=flags)
